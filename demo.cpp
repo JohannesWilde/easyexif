@@ -16,7 +16,18 @@ int main(int argc, char *argv[]) {
   fseek(fp, 0, SEEK_END);
   unsigned long fsize = ftell(fp);
   rewind(fp);
-  unsigned char *buf = new unsigned char[fsize];
+  unsigned char *buf = nullptr;
+  try
+  {
+    buf = new unsigned char[fsize];
+  }
+  catch (std::exception const &)
+  {
+    fclose(fp);
+    printf("Failed to allocate %d bytes of RAM to read in \"%s\".\n", fsize, argv[1]);
+    return -4;
+  }
+
   size_t const numberOfObjectsReadSuccessfully = fread(buf, 1, fsize, fp);
   fclose(fp);
   if (numberOfObjectsReadSuccessfully != fsize) {
