@@ -17,3 +17,11 @@ add_executable(easyExifDemo
 target_link_libraries(easyExifDemo
     PRIVATE easyExif
 )
+
+add_executable(fileTimeFromExifDateTimeOriginal
+    fileTimeFromExifDateTimeOriginal.cpp
+)
+
+target_link_libraries(fileTimeFromExifDateTimeOriginal
+    PRIVATE easyExif
+)

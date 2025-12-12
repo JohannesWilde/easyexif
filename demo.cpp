@@ -1,390 +1,97 @@
-
-#ifndef WIN32
-    #error "OS not currently supported."
-#endif
-
+#include <stdio.h>
 #include "exif.h"
 
-#include <errhandlingapi.h>
-#include <fileapi.h>
-#include <handleapi.h>
-#include <timezoneapi.h>
-#include <winnls.h>
+int main(int argc, char *argv[]) {
+  if (argc < 2) {
+    printf("Usage: demo <JPEG file>\n");
+    return -1;
+  }
 
-#include <stdexcept>
-#include <stdio.h>
-#include <vector>
+  // Read the JPEG file into a buffer
+  FILE *fp = fopen(argv[1], "rb");
+  if (!fp) {
+    printf("Can't open file.\n");
+    return -1;
+  }
+  fseek(fp, 0, SEEK_END);
+  unsigned long fsize = ftell(fp);
+  rewind(fp);
+  unsigned char *buf = nullptr;
+  try
+  {
+    buf = new unsigned char[fsize];
+  }
+  catch (std::exception const &)
+  {
+    fclose(fp);
+    printf("Failed to allocate %d bytes of RAM to read in \"%s\".\n", fsize, argv[1]);
+    return -4;
+  }
 
+  size_t const numberOfObjectsReadSuccessfully = fread(buf, 1, fsize, fp);
+  fclose(fp);
+  if (numberOfObjectsReadSuccessfully != fsize) {
+    printf("Can't read file.\n");
+    delete[] buf;
+    return -2;
+  }
 
-struct HandleCloser
-{
-    HandleCloser(HANDLE const fp)
-        : handle(fp)
-    {
-        // intentionally empty
-    }
+  // Parse EXIF
+  easyexif::EXIFInfo result;
+  int code = result.parseFrom(buf, fsize);
+  delete[] buf;
+  if (code) {
+    printf("Error parsing EXIF: code %d\n", code);
+    return -3;
+  }
 
-    ~HandleCloser()
-    {
-        if (handle)
-        {
-            CloseHandle(handle);
-        }
-    }
+  // Dump EXIF information
+  printf("Camera make          : %s\n", result.Make.c_str());
+  printf("Camera model         : %s\n", result.Model.c_str());
+  printf("Software             : %s\n", result.Software.c_str());
+  printf("Bits per sample      : %d\n", result.BitsPerSample);
+  printf("Image width          : %d\n", result.ImageWidth);
+  printf("Image height         : %d\n", result.ImageHeight);
+  printf("Image description    : %s\n", result.ImageDescription.c_str());
+  printf("Image orientation    : %d\n", result.Orientation);
+  printf("Image copyright      : %s\n", result.Copyright.c_str());
+  printf("Image date/time      : %s\n", result.DateTime.c_str());
+  printf("Original date/time   : %s\n", result.DateTimeOriginal.c_str());
+  printf("Digitize date/time   : %s\n", result.DateTimeDigitized.c_str());
+  printf("Subsecond time       : %s\n", result.SubSecTimeOriginal.c_str());
+  printf("Exposure time        : 1/%d s\n",
+         (unsigned)(1.0 / result.ExposureTime));
+  printf("F-stop               : f/%.1f\n", result.FNumber);
+  printf("Exposure program     : %d\n", result.ExposureProgram);
+  printf("ISO speed            : %d\n", result.ISOSpeedRatings);
+  printf("Subject distance     : %f m\n", result.SubjectDistance);
+  printf("Exposure bias        : %f EV\n", result.ExposureBiasValue);
+  printf("Flash used?          : %d\n", result.Flash);
+  printf("Flash returned light : %d\n", result.FlashReturnedLight);
+  printf("Flash mode           : %d\n", result.FlashMode);
+  printf("Metering mode        : %d\n", result.MeteringMode);
+  printf("Lens focal length    : %f mm\n", result.FocalLength);
+  printf("35mm focal length    : %u mm\n", result.FocalLengthIn35mm);
+  printf("GPS Latitude         : %f deg (%f deg, %f min, %f sec %c)\n",
+         result.GeoLocation.Latitude, result.GeoLocation.LatComponents.degrees,
+         result.GeoLocation.LatComponents.minutes,
+         result.GeoLocation.LatComponents.seconds,
+         result.GeoLocation.LatComponents.direction);
+  printf("GPS Longitude        : %f deg (%f deg, %f min, %f sec %c)\n",
+         result.GeoLocation.Longitude, result.GeoLocation.LonComponents.degrees,
+         result.GeoLocation.LonComponents.minutes,
+         result.GeoLocation.LonComponents.seconds,
+         result.GeoLocation.LonComponents.direction);
+  printf("GPS Altitude         : %f m\n", result.GeoLocation.Altitude);
+  printf("GPS Precision (DOP)  : %f\n", result.GeoLocation.DOP);
+  printf("Lens min focal length: %f mm\n", result.LensInfo.FocalLengthMin);
+  printf("Lens max focal length: %f mm\n", result.LensInfo.FocalLengthMax);
+  printf("Lens f-stop min      : f/%.1f\n", result.LensInfo.FStopMin);
+  printf("Lens f-stop max      : f/%.1f\n", result.LensInfo.FStopMax);
+  printf("Lens make            : %s\n", result.LensInfo.Make.c_str());
+  printf("Lens model           : %s\n", result.LensInfo.Model.c_str());
+  printf("Focal plane XRes     : %f\n", result.LensInfo.FocalPlaneXResolution);
+  printf("Focal plane YRes     : %f\n", result.LensInfo.FocalPlaneYResolution);
 
-    void close()
-    {
-        if (handle)
-        {
-            CloseHandle(handle);
-            handle = nullptr;
-        }
-    }
-
-private:
-
-    HANDLE handle;
-};
-
-std::string wstringToString(std::wstring const & input)
-{
-    std::string text;
-
-    int const successSize = WideCharToMultiByte(
-        /*CodePage*/ CP_UTF8,
-        /*dwFlags*/ WC_ERR_INVALID_CHARS,
-        /*lpWideCharStr*/ input.data(),
-        /*cchWideChar*/ -1, // until first '\0'
-        /*lpMultiByteStr*/ nullptr,
-        /*cbMultiByte*/ 0,
-        /*lpDefaultChar*/ nullptr,
-        /*lpUsedDefaultChar*/ nullptr
-        );
-
-    if (0 == successSize)
-    {
-        throw std::runtime_error("WideCharToMultiByte() failed 1.");
-    }
-
-    text.resize(successSize);
-
-    int const successFilled = WideCharToMultiByte(
-        /*CodePage*/ CP_UTF8,
-        /*dwFlags*/ WC_ERR_INVALID_CHARS,
-        /*lpWideCharStr*/ input.data(),
-        /*cchWideChar*/ -1, // until first '\0'
-        /*lpMultiByteStr*/ text.data(),
-        /*cbMultiByte*/ text.size(),
-        /*lpDefaultChar*/ nullptr,
-        /*lpUsedDefaultChar*/ nullptr
-        );
-    if (0 == successFilled)
-    {
-        throw std::runtime_error("WideCharToMultiByte() failed 2.");
-    }
-
-    return text;
-}
-
-void potentiallyRemoveTrailingNull(std::string & text)
-{
-    // Remove trailing '\0' - std::string takes care of that.
-    if (0 < text.size() && '\0' == text.back())
-    {
-        text.resize(text.size() - 1);
-    }
-}
-
-std::string filetimeToString(FILETIME const & fileTime)
-{
-    SYSTEMTIME systemTime;
-    {
-        BOOL const success = FileTimeToSystemTime(
-            /*lpFileTime*/ &fileTime,
-            /*lpSystemTime*/ &systemTime
-            );
-
-        if (!success)
-        {
-            throw std::runtime_error("filetimeToString() failed.");
-        }
-    }
-
-    std::wstring date;
-    {
-        int const numberOfBytesRequired = GetDateFormatEx(
-            /*lpLocaleName*/ LOCALE_NAME_USER_DEFAULT,
-            /*dwFlags*/ DATE_SHORTDATE,
-            /*lpDate*/ &systemTime,
-            /*lpFormat*/ NULL,
-            /*lpDateStr*/ nullptr,
-            /*cchDate*/ 0,
-            /*lpCalendar*/ NULL
-            );
-        if (0 == numberOfBytesRequired)
-        {
-            throw std::runtime_error("filetimeToString() failed GetDateFormatEx() 1.");
-        }
-        date.resize(numberOfBytesRequired);
-        int const numberOfBytesFilled = GetDateFormatEx(
-            /*lpLocaleName*/ LOCALE_NAME_USER_DEFAULT,
-            /*dwFlags*/ DATE_SHORTDATE,
-            /*lpDate*/ &systemTime,
-            /*lpFormat*/ NULL,
-            /*lpDateStr*/ date.data(),
-            /*cchDate*/ numberOfBytesRequired,
-            /*lpCalendar*/ NULL
-            );
-        if (0 == numberOfBytesFilled)
-        {
-            throw std::runtime_error("filetimeToString() failed GetDateFormatEx() 2.");
-        }
-        else if (numberOfBytesFilled != numberOfBytesRequired)
-        {
-            throw std::runtime_error("filetimeToString() failed GetDateFormatEx() 3.");
-        }
-    }
-
-    std::wstring time;
-    {
-        int const numberOfBytesRequired = GetTimeFormatEx(
-            /*lpLocaleName*/ LOCALE_NAME_USER_DEFAULT,
-            /*dwFlags*/ 0,
-            /*lpTime*/ &systemTime,
-            /*lpFormat*/ NULL,
-            /*lpTimeStr*/ nullptr,
-            /*cchTime*/ 0
-            );
-        if (0 == numberOfBytesRequired)
-        {
-            throw std::runtime_error("filetimeToString() failed GetTimeFormatEx() 1.");
-        }
-        time.resize(numberOfBytesRequired);
-        int const numberOfBytesFilled = GetTimeFormatEx(
-            /*lpLocaleName*/ LOCALE_NAME_USER_DEFAULT,
-            /*dwFlags*/ 0,
-            /*lpTime*/ &systemTime,
-            /*lpFormat*/ NULL,
-            /*lpTimeStr*/ time.data(),
-            /*cchTime*/ numberOfBytesRequired
-            );
-        if (0 == numberOfBytesFilled)
-        {
-            throw std::runtime_error("filetimeToString() failed GetTimeFormatEx() 2.");
-        }
-        else if (numberOfBytesFilled != numberOfBytesRequired)
-        {
-            throw std::runtime_error("filetimeToString() failed GetTimeFormatEx() 3.");
-        }
-    }
-
-    std::string dateString = wstringToString(date);
-    std::string timeString = wstringToString(time);
-
-    potentiallyRemoveTrailingNull(dateString);
-    potentiallyRemoveTrailingNull(timeString);
-
-    std::string const together = dateString + " " + timeString;
-
-    return together;
-}
-
-
-FILETIME stringToFileTime(std::string const & timeString)
-{
-    // Assumes YYYY:MM:DD HH:MM:SS as per https://www.imagekit.com/IK8Help/source/controlreference/imagekitcontrol/file/exif/propertydatetimeoriginal.htm .
-    char const separator = ':';
-    if (19 != timeString.size() ||
-        separator != timeString[4] ||
-        separator != timeString[7] ||
-        ' ' != timeString[10] ||
-        separator != timeString[13] ||
-        separator != timeString[16])
-    {
-        throw std::runtime_error("stringToFileTime() not of format \"YYYY:MM:DD HH:MM:SS\".");
-    }
-
-    WORD const year = std::stoul(timeString.substr(0, 4));
-    WORD const month = std::stoul(timeString.substr(5, 2));
-    WORD const day = std::stoul(timeString.substr(8, 2));
-    WORD const hour = std::stoul(timeString.substr(11, 2));
-    WORD const minute = std::stoul(timeString.substr(14, 2));
-    WORD const second = std::stoul(timeString.substr(17, 2));
-
-    SYSTEMTIME systemTime{
-        /*wYear*/ static_cast<WORD>(year),
-        /*wMonth*/ month,
-        /*wDayOfWeek*/ 0,  // ignored in SystemTimeToFileTime()
-        /*wDay*/ day,
-        /*wHour*/ hour,
-        /*wMinute*/ minute,
-        /*wSecond*/ second,
-        /*wMilliseconds*/ 0
-    };
-
-    FILETIME fileTime{0, 0};
-    {
-        BOOL const success = SystemTimeToFileTime(
-            /*lpSystemTime*/ &systemTime,
-            /*lpFileTime*/ &fileTime
-            );
-        if (!success)
-        {
-            // DWORD const errorCode = GetLastError();
-            // printf("SystemTimeToFileTime() failed [%d].\n", errorCode);
-            throw std::runtime_error("SystemTimeToFileTime() failed.");
-        }
-    }
-
-    return fileTime;
-}
-
-int main(int argc, char *argv[])
-{
-    try
-    {
-        if (argc != 2)
-        {
-            printf("Usage: %s <JPEG file>\n", argv[0]);
-            return -1;
-        }
-
-        char const * const filePath = argv[1];
-
-        // Read the JPEG file into a buffer
-
-
-        HANDLE const fileHandle = CreateFileA(/*lpFileName*/ filePath,
-                                              /*dwDesiredAccess*/ FILE_READ_DATA | FILE_WRITE_ATTRIBUTES,
-                                              /*dwShareMode*/ 0,
-                                              /*lpSecurityAttributes*/ nullptr,
-                                              /*dwCreationDisposition*/ OPEN_EXISTING,
-                                              /*dwFlagsAndAttributes*/ FILE_ATTRIBUTE_NORMAL,
-                                              /*hTemplateFile*/ NULL
-                                              );
-
-        if (INVALID_HANDLE_VALUE == fileHandle)
-        {
-            DWORD const errorCode = GetLastError();
-            printf("Failed to change file attributes [%d].\n", errorCode);
-            return -2;
-        }
-
-        HandleCloser const handleCloser(fileHandle);
-
-        LARGE_INTEGER fileSize{ .QuadPart = -1 };
-        {
-            BOOL const success = GetFileSizeEx(/*hFile*/ fileHandle, /*lpFileSize*/ &fileSize);
-            if (!success)
-            {
-                DWORD const errorCode = GetLastError();
-                printf("Failed to query file size [%d].\n", errorCode);
-                return -3;
-            }
-            else if (0 < fileSize.HighPart)
-            {
-                printf("File too big to read [%d].\n", fileSize.QuadPart);
-                return -4;
-            }
-        }
-
-        std::vector<unsigned char> buf(fileSize.QuadPart);
-        {
-            DWORD numberOfBytesRead = -1;
-            BOOL const sucess = ReadFile(
-                /*hFile*/ fileHandle,
-                /*lpBuffer*/ buf.data(),
-                /*nNumberOfBytesToRead*/ fileSize.LowPart,
-                /*lpNumberOfBytesRead*/ &numberOfBytesRead,
-                /*lpOverlapped*/ nullptr
-                );
-
-            if (!sucess)
-            {
-                DWORD const errorCode = GetLastError();
-                printf("Failed to read file [%d].\n", errorCode);
-                return -5;
-            }
-            else if (fileSize.LowPart != numberOfBytesRead)
-            {
-                printf("Failed to read complete file [%d/%d].\n", numberOfBytesRead, fileSize.QuadPart);
-                return -6;
-            }
-        }
-
-
-        // Parse EXIF
-        easyexif::EXIFInfo result;
-        int const code = result.parseFrom(buf.data(), buf.size());
-        if (0 != code)
-        {
-          printf("Error parsing EXIF: code %d\n", code);
-          return -7;
-        }
-
-        // // Dump EXIF information
-        // printf("Original date/time   : %s\n", result.DateTimeOriginal.c_str());
-        FILETIME const originalTime = stringToFileTime(result.DateTimeOriginal);
-
-        FILETIME creationTime{0, 0};
-        FILETIME lastAccessTime{0, 0};
-        FILETIME lastWriteTime{0, 0};
-        {
-            BOOL const success = GetFileTime(
-                /*hFile*/ fileHandle,
-                /*lpCreationTime*/ &creationTime,
-                /*lpLastAccessTime*/ &lastAccessTime,
-                /*lpLastWriteTime*/ &lastWriteTime
-                );
-
-            if (!success)
-            {
-                DWORD const errorCode = GetLastError();
-                printf("Error querying file timestamps [%d].\n", errorCode);
-                return -7;
-            }
-            // else
-            // {
-            //     printf("creationTime   : %s\n", );
-            //     printf("lastAccessTime   : %s\n", );
-            //     printf("lastWriteTime   : %s\n", filetimeToString(lastWriteTime).c_str());
-            // }
-        }
-
-
-        BOOL const success = SetFileTime(
-            /*hFile*/ fileHandle,
-            /*lpCreationTime*/ &originalTime,
-            /*lpLastAccessTime*/ nullptr, // Do not modify this, it will be overwritten every one opens it in a viewer anyway.
-            /*lpLastWriteTime*/ &originalTime
-            );
-
-        if (success)
-        {
-            printf("\"%s\" creation and modification time changed from \"%s\" and \"%s\" to \"%s\".\n",
-                   filePath,
-                   filetimeToString(creationTime).c_str(),
-                   filetimeToString(lastWriteTime).c_str(),
-                   filetimeToString(originalTime).c_str());
-        }
-        else
-        {
-            DWORD const errorCode = GetLastError();
-            printf("Failed to replace creation and modification time for \"%s\" [%d].\n",
-                   filePath,
-                   errorCode);
-        }
-    }
-    catch (std::exception const & e)
-    {
-        printf("Exception: %s\n", e.what());
-        return -100;
-    }
-    catch (...)
-    {
-        printf("Exception: unknown.\n");
-        return -101;
-    }
-
-    return 0;
+  return 0;
 }
