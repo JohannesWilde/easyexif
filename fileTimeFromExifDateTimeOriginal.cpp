@@ -70,7 +70,7 @@ std::string wstringToString(std::wstring const & input)
         /*lpWideCharStr*/ input.data(),
         /*cchWideChar*/ -1, // until first '\0'
         /*lpMultiByteStr*/ text.data(),
-        /*cbMultiByte*/ text.size(),
+        /*cbMultiByte*/ successSize,
         /*lpDefaultChar*/ nullptr,
         /*lpUsedDefaultChar*/ nullptr
         );
