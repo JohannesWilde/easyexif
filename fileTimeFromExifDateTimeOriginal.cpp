@@ -291,6 +291,7 @@ int main(int argc, char *argv[])
             }
             else if (0 < fileSize.HighPart)
             {
+#define exifUnsignedNotExceeded
                 printf("File too big to read [%lld].\n", fileSize.QuadPart);
                 return -4;
             }
@@ -323,7 +324,11 @@ int main(int argc, char *argv[])
 
         // Parse EXIF
         easyexif::EXIFInfo result;
-        int const code = result.parseFrom(buf.data(), buf.size());
+        int const code = result.parseFrom(buf.data(),
+                                          static_cast<unsigned>(buf.size()));
+#ifndef exifUnsignedNotExceeded
+#error "static_cast<unsigned>(buf.size()) requires buf.size() to not exceed std::numeric_limits<unsigned>::max()."
+#endif
         if (0 != code)
         {
           printf("Error parsing EXIF: code %d\n", code);
