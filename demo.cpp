@@ -11,7 +11,6 @@
 #include <timezoneapi.h>
 #include <winnls.h>
 
-#include <cstdint>
 #include <stdexcept>
 #include <stdio.h>
 #include <vector>
@@ -191,6 +190,55 @@ std::string filetimeToString(FILETIME const & fileTime)
 }
 
 
+FILETIME stringToFileTime(std::string const & timeString)
+{
+    // Assumes YYYY:MM:DD HH:MM:SS
+    char const separator = ':';
+    if (19 != timeString.size() ||
+        separator != timeString[4] ||
+        separator != timeString[7] ||
+        ' ' != timeString[10] ||
+        separator != timeString[13] ||
+        separator != timeString[16])
+    {
+        throw std::runtime_error("stringToFileTime() not of format \"YYYY:MM:DD HH:MM:SS\".");
+    }
+
+    WORD const year = std::stoul(timeString.substr(0, 4));
+    WORD const month = std::stoul(timeString.substr(5, 2));
+    WORD const day = std::stoul(timeString.substr(8, 2));
+    WORD const hour = std::stoul(timeString.substr(11, 2));
+    WORD const minute = std::stoul(timeString.substr(14, 2));
+    WORD const second = std::stoul(timeString.substr(17, 2));
+
+    SYSTEMTIME systemTime{
+        /*wYear*/ static_cast<WORD>(year),
+        /*wMonth*/ month,
+        /*wDayOfWeek*/ 0,  // ignored in SystemTimeToFileTime()
+        /*wDay*/ day,
+        /*wHour*/ hour,
+        /*wMinute*/ minute,
+        /*wSecond*/ second,
+        /*wMilliseconds*/ 0
+    };
+
+    FILETIME fileTime{0, 0};
+    {
+        BOOL const success = SystemTimeToFileTime(
+            /*lpSystemTime*/ &systemTime,
+            /*lpFileTime*/ &fileTime
+            );
+        if (!success)
+        {
+            DWORD const errorCode = GetLastError();
+            printf("SystemTimeToFileTime() failed [%d].\n", errorCode);
+            throw std::runtime_error("SystemTimeToFileTime() failed.");
+        }
+    }
+
+    return fileTime;
+}
+
 int main(int argc, char *argv[])
 {
     try
@@ -277,6 +325,7 @@ int main(int argc, char *argv[])
         // Dump EXIF information
         printf("Original date/time   : %s\n", result.DateTimeOriginal.c_str());
 
+        FILETIME const originalTime = stringToFileTime(result.DateTimeOriginal);
 
         {
             FILETIME creationTime{0, 0};
@@ -298,6 +347,7 @@ int main(int argc, char *argv[])
             }
             else
             {
+                printf("originalTime   : %s\n", filetimeToString(originalTime).c_str());
                 printf("creationTime   : %s\n", filetimeToString(creationTime).c_str());
                 printf("lastAccessTime   : %s\n", filetimeToString(lastAccessTime).c_str());
                 printf("lastWriteTime   : %s\n", filetimeToString(lastWriteTime).c_str());
