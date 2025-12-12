@@ -5,11 +5,7 @@
 
 #include "exif.h"
 
-#include <errhandlingapi.h>
-#include <fileapi.h>
-#include <handleapi.h>
-#include <timezoneapi.h>
-#include <winnls.h>
+#include <windows.h>
 
 #include <stdexcept>
 #include <stdio.h>
