@@ -230,8 +230,8 @@ FILETIME stringToFileTime(std::string const & timeString)
             );
         if (!success)
         {
-            DWORD const errorCode = GetLastError();
-            printf("SystemTimeToFileTime() failed [%d].\n", errorCode);
+            // DWORD const errorCode = GetLastError();
+            // printf("SystemTimeToFileTime() failed [%d].\n", errorCode);
             throw std::runtime_error("SystemTimeToFileTime() failed.");
         }
     }
@@ -322,16 +322,14 @@ int main(int argc, char *argv[])
           return -7;
         }
 
-        // Dump EXIF information
-        printf("Original date/time   : %s\n", result.DateTimeOriginal.c_str());
-
+        // // Dump EXIF information
+        // printf("Original date/time   : %s\n", result.DateTimeOriginal.c_str());
         FILETIME const originalTime = stringToFileTime(result.DateTimeOriginal);
 
+        FILETIME creationTime{0, 0};
+        FILETIME lastAccessTime{0, 0};
+        FILETIME lastWriteTime{0, 0};
         {
-            FILETIME creationTime{0, 0};
-            FILETIME lastAccessTime{0, 0};
-            FILETIME lastWriteTime{0, 0};
-
             BOOL const success = GetFileTime(
                 /*hFile*/ fileHandle,
                 /*lpCreationTime*/ &creationTime,
@@ -345,21 +343,37 @@ int main(int argc, char *argv[])
                 printf("Error querying file timestamps [%d].\n", errorCode);
                 return -7;
             }
-            else
-            {
-                printf("originalTime   : %s\n", filetimeToString(originalTime).c_str());
-                printf("creationTime   : %s\n", filetimeToString(creationTime).c_str());
-                printf("lastAccessTime   : %s\n", filetimeToString(lastAccessTime).c_str());
-                printf("lastWriteTime   : %s\n", filetimeToString(lastWriteTime).c_str());
-            }
+            // else
+            // {
+            //     printf("creationTime   : %s\n", );
+            //     printf("lastAccessTime   : %s\n", );
+            //     printf("lastWriteTime   : %s\n", filetimeToString(lastWriteTime).c_str());
+            // }
         }
 
-        // BOOL SetFileTime(
-        //     [in]           HANDLE         hFile,
-        //     [in, optional] const FILETIME *lpCreationTime,
-        //     [in, optional] const FILETIME *lpLastAccessTime,
-        //     [in, optional] const FILETIME *lpLastWriteTime
-        //     );
+
+        BOOL const success = SetFileTime(
+            /*hFile*/ fileHandle,
+            /*lpCreationTime*/ &originalTime,
+            /*lpLastAccessTime*/ nullptr, // Do not modify this, it will be overwritten every one opens it in a viewer anyway.
+            /*lpLastWriteTime*/ &originalTime
+            );
+
+        if (success)
+        {
+            printf("\"%s\" creation and modification time changed from \"%s\" and \"%s\" to \"%s\".\n",
+                   filePath,
+                   filetimeToString(creationTime).c_str(),
+                   filetimeToString(lastWriteTime).c_str(),
+                   filetimeToString(originalTime).c_str());
+        }
+        else
+        {
+            DWORD const errorCode = GetLastError();
+            printf("Failed to replace creation and modification time for \"%s\" [%d].\n",
+                   filePath,
+                   errorCode);
+        }
     }
     catch (std::exception const & e)
     {
