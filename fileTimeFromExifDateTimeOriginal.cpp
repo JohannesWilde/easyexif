@@ -5,8 +5,10 @@
 
 #include "exif.h"
 
+#define NOMINMAX
 #include <windows.h>
 
+#include <limits>
 #include <stdexcept>
 #include <stdio.h>
 #include <vector>
@@ -185,6 +187,16 @@ std::string filetimeToString(FILETIME const & fileTime)
     return together;
 }
 
+WORD stringToWord(std::string const & text)
+{
+    unsigned long const value = std::stoul(text);
+    if (std::numeric_limits<WORD>::max() < value)
+    {
+        throw std::runtime_error("stringToWord: value too big.");
+    }
+    WORD const word = static_cast<WORD>(value);
+    return word;
+}
 
 FILETIME stringToFileTime(std::string const & timeString)
 {
@@ -200,15 +212,15 @@ FILETIME stringToFileTime(std::string const & timeString)
         throw std::runtime_error("stringToFileTime() not of format \"YYYY:MM:DD HH:MM:SS\".");
     }
 
-    WORD const year = std::stoul(timeString.substr(0, 4));
-    WORD const month = std::stoul(timeString.substr(5, 2));
-    WORD const day = std::stoul(timeString.substr(8, 2));
-    WORD const hour = std::stoul(timeString.substr(11, 2));
-    WORD const minute = std::stoul(timeString.substr(14, 2));
-    WORD const second = std::stoul(timeString.substr(17, 2));
+    WORD const year = stringToWord(timeString.substr(0, 4));
+    WORD const month = stringToWord(timeString.substr(5, 2));
+    WORD const day = stringToWord(timeString.substr(8, 2));
+    WORD const hour = stringToWord(timeString.substr(11, 2));
+    WORD const minute = stringToWord(timeString.substr(14, 2));
+    WORD const second = stringToWord(timeString.substr(17, 2));
 
     SYSTEMTIME systemTime{
-        /*wYear*/ static_cast<WORD>(year),
+        /*wYear*/ year,
         /*wMonth*/ month,
         /*wDayOfWeek*/ 0,  // ignored in SystemTimeToFileTime()
         /*wDay*/ day,
@@ -279,7 +291,7 @@ int main(int argc, char *argv[])
             }
             else if (0 < fileSize.HighPart)
             {
-                printf("File too big to read [%d].\n", fileSize.QuadPart);
+                printf("File too big to read [%lld].\n", fileSize.QuadPart);
                 return -4;
             }
         }
@@ -303,7 +315,7 @@ int main(int argc, char *argv[])
             }
             else if (fileSize.LowPart != numberOfBytesRead)
             {
-                printf("Failed to read complete file [%d/%d].\n", numberOfBytesRead, fileSize.QuadPart);
+                printf("Failed to read complete file [%lu/%lld].\n", numberOfBytesRead, fileSize.QuadPart);
                 return -6;
             }
         }
