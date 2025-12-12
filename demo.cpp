@@ -192,7 +192,7 @@ std::string filetimeToString(FILETIME const & fileTime)
 
 FILETIME stringToFileTime(std::string const & timeString)
 {
-    // Assumes YYYY:MM:DD HH:MM:SS
+    // Assumes YYYY:MM:DD HH:MM:SS as per https://www.imagekit.com/IK8Help/source/controlreference/imagekitcontrol/file/exif/propertydatetimeoriginal.htm .
     char const separator = ':';
     if (19 != timeString.size() ||
         separator != timeString[4] ||
