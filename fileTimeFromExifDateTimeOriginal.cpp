@@ -337,6 +337,11 @@ int main(int argc, char *argv[])
 
         // // Dump EXIF information
         // printf("Original date/time   : %s\n", result.DateTimeOriginal.c_str());
+        if (result.DateTimeOriginal.empty())
+        {
+            printf("No EXIF::DateTimeOriginal entry available in \"%s\".\n", filePath);
+            return -8;
+        }
         FILETIME const originalTime = stringToFileTime(result.DateTimeOriginal);
 
         FILETIME creationTime{0, 0};
@@ -354,7 +359,7 @@ int main(int argc, char *argv[])
             {
                 DWORD const errorCode = GetLastError();
                 printf("Error querying file timestamps [%lu].\n", errorCode);
-                return -7;
+                return -9;
             }
             // else
             // {
