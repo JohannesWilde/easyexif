@@ -17,12 +17,13 @@ int main(int argc, char *argv[]) {
   unsigned long fsize = ftell(fp);
   rewind(fp);
   unsigned char *buf = new unsigned char[fsize];
-  if (fread(buf, 1, fsize, fp) != fsize) {
+  size_t const numberOfObjectsReadSuccessfully = fread(buf, 1, fsize, fp);
+  fclose(fp);
+  if (numberOfObjectsReadSuccessfully != fsize) {
     printf("Can't read file.\n");
     delete[] buf;
     return -2;
   }
-  fclose(fp);
 
   // Parse EXIF
   easyexif::EXIFInfo result;
