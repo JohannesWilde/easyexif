@@ -227,7 +227,7 @@ FILETIME stringToFileTime(std::string const & timeString)
         if (!success)
         {
             // DWORD const errorCode = GetLastError();
-            // printf("SystemTimeToFileTime() failed [%d].\n", errorCode);
+            // printf("SystemTimeToFileTime() failed [%lu].\n", errorCode);
             throw std::runtime_error("SystemTimeToFileTime() failed.");
         }
     }
@@ -262,7 +262,7 @@ int main(int argc, char *argv[])
         if (INVALID_HANDLE_VALUE == fileHandle)
         {
             DWORD const errorCode = GetLastError();
-            printf("Failed to change file attributes [%d].\n", errorCode);
+            printf("Failed to change file attributes [%lu].\n", errorCode);
             return -2;
         }
 
@@ -274,7 +274,7 @@ int main(int argc, char *argv[])
             if (!success)
             {
                 DWORD const errorCode = GetLastError();
-                printf("Failed to query file size [%d].\n", errorCode);
+                printf("Failed to query file size [%lu].\n", errorCode);
                 return -3;
             }
             else if (0 < fileSize.HighPart)
@@ -298,7 +298,7 @@ int main(int argc, char *argv[])
             if (!sucess)
             {
                 DWORD const errorCode = GetLastError();
-                printf("Failed to read file [%d].\n", errorCode);
+                printf("Failed to read file [%lu].\n", errorCode);
                 return -5;
             }
             else if (fileSize.LowPart != numberOfBytesRead)
@@ -336,7 +336,7 @@ int main(int argc, char *argv[])
             if (!success)
             {
                 DWORD const errorCode = GetLastError();
-                printf("Error querying file timestamps [%d].\n", errorCode);
+                printf("Error querying file timestamps [%lu].\n", errorCode);
                 return -7;
             }
             // else
@@ -366,7 +366,7 @@ int main(int argc, char *argv[])
         else
         {
             DWORD const errorCode = GetLastError();
-            printf("Failed to replace creation and modification time for \"%s\" [%d].\n",
+            printf("Failed to replace creation and modification time for \"%s\" [%lu].\n",
                    filePath,
                    errorCode);
         }
